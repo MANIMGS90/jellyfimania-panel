@@ -1,81 +1,175 @@
 // ================================================================
-// db.js - Inicializacion de la base de datos SQLite del panel
-// ================================================================
-// Usamos better-sqlite3 (sincrono, simple, muy usado en Render sin
-// problemas de compilacion). Todo vive en un solo archivo
-// data/panel.db que se crea solo la primera vez que arranca.
+// db.js - Almacen de datos en JSON puro (sin SQLite / sin nada que
+// compilar). Por que el cambio: better-sqlite3 necesita compilar
+// codigo C++ (node-gyp) durante el "npm install", y eso fallo en el
+// entorno de build de Render ("Exited with status 1 while building
+// your code" / "gyp ERR!"). Con JSON no hay NADA que compilar --
+// garantiza que instale igual en Render, en tu compu, o en
+// cualquier otro lado.
 // ================================================================
 
-const Database = require("better-sqlite3");
-const path = require("path");
 const fs = require("fs");
+const path = require("path");
 const bcrypt = require("bcryptjs");
 
 const DATA_DIR = path.join(__dirname, "data");
+const DATA_FILE = path.join(DATA_DIR, "panel.json");
+
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
-const db = new Database(path.join(DATA_DIR, "panel.db"));
-db.pragma("journal_mode = WAL");
+function emptyDb() {
+  return {
+    nextId: 1,
+    users: [],
+    media_accounts: [],
+    credit_moves: [],
+    settings: {},
+  };
+}
 
-db.exec(`
-CREATE TABLE IF NOT EXISTS users (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  username TEXT UNIQUE NOT NULL,
-  password_hash TEXT NOT NULL,
-  role TEXT NOT NULL CHECK(role IN ('superadmin','seller','reseller')),
-  parent_id INTEGER REFERENCES users(id),
-  credits INTEGER NOT NULL DEFAULT 0,
-  is_infinite INTEGER NOT NULL DEFAULT 0,
-  active INTEGER NOT NULL DEFAULT 1,
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
+let state;
+try {
+  state = JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
+} catch {
+  state = emptyDb();
+}
 
-CREATE TABLE IF NOT EXISTS media_accounts (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  owner_user_id INTEGER NOT NULL REFERENCES users(id),
-  service TEXT NOT NULL CHECK(service IN ('jellyfin','plex','emby')),
-  service_user_id TEXT,
-  username TEXT NOT NULL,
-  client_name TEXT,
-  is_demo INTEGER NOT NULL DEFAULT 0,
-  status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','suspended')),
-  expires_at TEXT NOT NULL,
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
+function save() {
+  fs.writeFileSync(DATA_FILE, JSON.stringify(state, null, 2));
+}
 
-CREATE TABLE IF NOT EXISTS credit_moves (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  from_user_id INTEGER REFERENCES users(id),
-  to_user_id INTEGER NOT NULL REFERENCES users(id),
-  amount INTEGER NOT NULL,
-  reason TEXT,
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
+function nextId() {
+  const id = state.nextId;
+  state.nextId += 1;
+  return id;
+}
 
-CREATE TABLE IF NOT EXISTS settings (
-  key TEXT PRIMARY KEY,
-  value TEXT
-);
-`);
+function nowIso() {
+  return new Date().toISOString();
+}
 
-// Crea el Super Admin la primera vez que se corre el panel, usando
-// las variables de entorno ADMIN_USER / ADMIN_PASS (ver .env.example).
-// Asi nunca queda una contrasena de admin fija dentro del codigo.
+function findUserByUsername(username) {
+  return state.users.find((u) => u.username === username) || null;
+}
+
+function findUserById(id) {
+  return state.users.find((u) => u.id === Number(id)) || null;
+}
+
+function insertUser({ username, password_hash, role, parent_id, credits, is_infinite }) {
+  const user = {
+    id: nextId(),
+    username,
+    password_hash,
+    role,
+    parent_id: parent_id ?? null,
+    credits: credits || 0,
+    is_infinite: is_infinite ? 1 : 0,
+    active: 1,
+    created_at: nowIso(),
+  };
+  state.users.push(user);
+  save();
+  return user;
+}
+
+function updateUserCredits(id, delta) {
+  const user = findUserById(id);
+  if (!user) return;
+  user.credits += delta;
+  save();
+}
+
+function allUsers() {
+  return state.users;
+}
+
+function insertMediaAccount(data) {
+  const acc = {
+    id: nextId(),
+    created_at: nowIso(),
+    status: "active",
+    ...data,
+  };
+  state.media_accounts.push(acc);
+  save();
+  return acc;
+}
+
+function findMediaAccountById(id) {
+  return state.media_accounts.find((a) => a.id === Number(id)) || null;
+}
+
+function allMediaAccounts() {
+  return state.media_accounts;
+}
+
+function updateMediaAccountStatus(id, status) {
+  const acc = findMediaAccountById(id);
+  if (!acc) return;
+  acc.status = status;
+  save();
+}
+
+function deleteMediaAccount(id) {
+  state.media_accounts = state.media_accounts.filter((a) => a.id !== Number(id));
+  save();
+}
+
+function insertCreditMove({ from_user_id, to_user_id, amount, reason }) {
+  state.credit_moves.push({
+    id: nextId(),
+    from_user_id,
+    to_user_id,
+    amount,
+    reason,
+    created_at: nowIso(),
+  });
+  save();
+}
+
+function getSetting(key, fallback) {
+  return state.settings[key] || fallback;
+}
+
+function setSetting(key, value) {
+  state.settings[key] = value;
+  save();
+}
+
 function ensureSuperAdmin() {
-  const existing = db.prepare("SELECT id FROM users WHERE role = 'superadmin'").get();
+  const existing = state.users.find((u) => u.role === "superadmin");
   if (existing) return;
 
   const username = process.env.ADMIN_USER || "admin";
   const password = process.env.ADMIN_PASS || "cambia-esta-clave";
   const hash = bcrypt.hashSync(password, 10);
 
-  db.prepare(`
-    INSERT INTO users (username, password_hash, role, parent_id, credits, is_infinite)
-    VALUES (?, ?, 'superadmin', NULL, 0, 1)
-  `).run(username, hash);
+  insertUser({
+    username,
+    password_hash: hash,
+    role: "superadmin",
+    parent_id: null,
+    credits: 0,
+    is_infinite: true,
+  });
 
   console.log(`[JELLYFIMANIA] Super Admin creado: usuario="${username}" (define ADMIN_USER/ADMIN_PASS en tus variables de entorno para cambiarlo)`);
 }
 ensureSuperAdmin();
 
-module.exports = db;
+module.exports = {
+  findUserByUsername,
+  findUserById,
+  insertUser,
+  updateUserCredits,
+  allUsers,
+  insertMediaAccount,
+  findMediaAccountById,
+  allMediaAccounts,
+  updateMediaAccountStatus,
+  deleteMediaAccount,
+  insertCreditMove,
+  getSetting,
+  setSetting,
+};
