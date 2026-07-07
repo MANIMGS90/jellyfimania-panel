@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JELLYFIMANIA · Panel</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ============ PANTALLA DE LOGIN ============ -->
+<div id="loginScreen" class="login-wrap">
+  <div class="login-card">
+    <div class="brand">
+      <span class="brand-name">JELLYFIMANIA</span>
+      <span class="brand-tag">Panel administrativo</span>
+    </div>
+    <form id="loginForm">
+      <label>Usuario</label>
+      <input type="text" id="loginUser" autocomplete="username" required>
+      <label>Contraseña</label>
+      <input type="password" id="loginPass" autocomplete="current-password" required>
+      <button type="submit" class="btn btn-primary btn-block">Entrar</button>
+      <div id="loginError" class="error-msg"></div>
+    </form>
+  </div>
+</div>
+
+<!-- ============ APP (despues de iniciar sesion) ============ -->
+<div id="app" class="app hidden">
+
+  <aside class="sidebar">
+    <div class="brand-mini">JELLYFI<span>MANIA</span></div>
+    <nav>
+      <button class="nav-item active" data-view="dashboard">Dashboard</button>
+      <button class="nav-item" data-view="accounts">Cuentas</button>
+      <button class="nav-item" data-view="panelUsers">Sellers / Resellers</button>
+      <button class="nav-item" data-view="settings" id="navSettings">Configuración</button>
+    </nav>
+    <div class="sidebar-footer">
+      <div id="whoami"></div>
+      <button id="logoutBtn" class="btn btn-ghost btn-block">Cerrar sesión</button>
+    </div>
+  </aside>
+
+  <main class="main">
+
+    <!-- ---------- DASHBOARD ---------- -->
+    <section id="view-dashboard" class="view">
+      <h1>Dashboard</h1>
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="stat-value" id="statActive">-</div>
+          <div class="stat-label">Cuentas activas</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statDemo">-</div>
+          <div class="stat-label">Demos activas</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statSuspended">-</div>
+          <div class="stat-label">Suspendidas</div>
+        </div>
+        <div class="stat-card accent">
+          <div class="stat-value" id="statCredits">-</div>
+          <div class="stat-label">Tus créditos</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Vencen en los próximos 3 días</h2>
+        <table class="table" id="expiringTable">
+          <thead><tr><th>Cliente</th><th>Usuario</th><th>Servicio</th><th>Vence</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <div class="empty-msg" id="expiringEmpty">Nada por vencer, todo tranquilo.</div>
+      </div>
+    </section>
+
+    <!-- ---------- CUENTAS ---------- -->
+    <section id="view-accounts" class="view hidden">
+      <div class="view-header">
+        <h1>Cuentas</h1>
+        <button class="btn btn-primary" id="btnNewAccount">+ Nueva cuenta</button>
+      </div>
+      <table class="table" id="accountsTable">
+        <thead>
+          <tr><th>Cliente</th><th>Usuario</th><th>Servicio</th><th>Tipo</th><th>Dispositivos</th><th>Estado</th><th>Vence</th><th></th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <!-- ---------- SELLERS / RESELLERS ---------- -->
+    <section id="view-panelUsers" class="view hidden">
+      <div class="view-header">
+        <h1>Sellers / Resellers</h1>
+        <button class="btn btn-primary" id="btnNewPanelUser">+ Nuevo</button>
+      </div>
+      <table class="table" id="panelUsersTable">
+        <thead>
+          <tr><th>Usuario</th><th>Rol</th><th>Créditos</th><th>Creado</th><th></th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <!-- ---------- CONFIGURACION (solo superadmin) ---------- -->
+    <section id="view-settings" class="view hidden">
+      <h1>Configuración de servidores</h1>
+
+      <div class="card">
+        <h2>Jellyfin</h2>
+        <label>URL del servidor</label>
+        <input type="text" id="cfgJellyfinUrl" placeholder="http://tu-servidor:8096">
+        <label>API Key</label>
+        <input type="text" id="cfgJellyfinKey" placeholder="API key de Jellyfin">
+        <div class="btn-row">
+          <button class="btn btn-secondary" id="btnTestJellyfin">Probar conexión</button>
+          <span id="jellyfinTestResult" class="test-result"></span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Emby</h2>
+        <label>URL del servidor</label>
+        <input type="text" id="cfgEmbyUrl" placeholder="http://tu-servidor:8096">
+        <label>API Key</label>
+        <input type="text" id="cfgEmbyKey" placeholder="API key de Emby">
+        <div class="btn-row">
+          <button class="btn btn-secondary" id="btnTestEmby">Probar conexión</button>
+          <span id="embyTestResult" class="test-result"></span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Plex</h2>
+        <p class="hint">Plex no soporta usuario/contraseña propios: al crear una cuenta Plex se invita por correo a tu servidor compartido.</p>
+        <label>Token de Plex (X-Plex-Token)</label>
+        <input type="text" id="cfgPlexToken" placeholder="Tu token de Plex">
+        <label>Server ID (machineIdentifier)</label>
+        <input type="text" id="cfgPlexServerId" placeholder="ID de tu servidor Plex">
+      </div>
+
+      <button class="btn btn-primary" id="btnSaveSettings">Guardar configuración</button>
+      <div id="settingsSaved" class="test-result"></div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ============ MODAL: nueva cuenta ============ -->
+<div id="modalNewAccount" class="modal hidden">
+  <div class="modal-box">
+    <h2>Nueva cuenta</h2>
+    <form id="formNewAccount">
+      <label>Servicio</label>
+      <select id="accService">
+        <option value="jellyfin">Jellyfin</option>
+        <option value="emby">Emby</option>
+        <option value="plex">Plex</option>
+      </select>
+
+      <label>Tipo</label>
+      <select id="accType">
+        <option value="real">Cuenta con plan</option>
+        <option value="demo">Demo</option>
+      </select>
+
+      <div id="accPlanWrap">
+        <label>Plan</label>
+        <select id="accPlan">
+          <option value="1m">1 mes</option>
+          <option value="2m">2 meses</option>
+          <option value="3m">3 meses</option>
+          <option value="6m">6 meses</option>
+        </select>
+
+        <label>Dispositivos simultáneos</label>
+        <select id="accMaxDevices">
+          <option value="1">1 dispositivo</option>
+          <option value="2">2 dispositivos</option>
+          <option value="3">3 dispositivos</option>
+        </select>
+      </div>
+
+      <div id="accDemoWrap" class="hidden">
+        <label>Duración de la demo</label>
+        <select id="accDemoLength">
+          <option value="1h">1 hora</option>
+          <option value="2h">2 horas</option>
+          <option value="3h">3 horas</option>
+          <option value="12h">12 horas</option>
+        </select>
+      </div>
+
+      <label id="accUserLabel">Usuario</label>
+      <input type="text" id="accUsername" required>
+
+      <div id="accPassWrap">
+        <label>Contraseña</label>
+        <input type="text" id="accPassword">
+      </div>
+
+      <label>Nombre del cliente (opcional, solo para tu referencia)</label>
+      <input type="text" id="accClientName">
+
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" id="btnCancelNewAccount">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Crear</button>
+      </div>
+      <div id="newAccountError" class="error-msg"></div>
+    </form>
+  </div>
+</div>
+
+<!-- ============ MODAL: nuevo usuario del panel ============ -->
+<div id="modalNewPanelUser" class="modal hidden">
+  <div class="modal-box">
+    <h2>Nuevo seller / reseller</h2>
+    <form id="formNewPanelUser">
+      <label>Usuario</label>
+      <input type="text" id="puUsername" required>
+      <label>Contraseña</label>
+      <input type="text" id="puPassword" required>
+      <label>Rol</label>
+      <select id="puRole">
+        <option value="reseller">Reseller</option>
+        <option value="seller">Seller</option>
+      </select>
+      <label>Créditos iniciales</label>
+      <input type="number" id="puCredits" value="0" min="0">
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" id="btnCancelNewPanelUser">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Crear</button>
+      </div>
+      <div id="newPanelUserError" class="error-msg"></div>
+    </form>
+  </div>
+</div>
+
+<!-- ============ MODAL: dar creditos ============ -->
+<div id="modalCredits" class="modal hidden">
+  <div class="modal-box">
+    <h2>Dar créditos</h2>
+    <form id="formCredits">
+      <p id="creditsTargetLabel"></p>
+      <label>Cantidad</label>
+      <input type="number" id="creditsAmount" min="1" required>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" id="btnCancelCredits">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Enviar</button>
+      </div>
+      <div id="creditsError" class="error-msg"></div>
+    </form>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

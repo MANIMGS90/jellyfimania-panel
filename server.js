@@ -1,3 +1,8 @@
+// ================================================================
+// server.js - Panel JELLYFIMANIA
+// Backend Node.js + Express + almacen JSON (ver db.js)
+// ================================================================
+
 require("dotenv").config();
 
 const express = require("express");
@@ -16,7 +21,12 @@ const JWT_SECRET = process.env.JWT_SECRET || "cambia-este-secreto-en-produccion"
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
+// ---------------------------------------------------------------
+// Utilidades de jerarquia
+// ---------------------------------------------------------------
+
 function descendantIds(rootId) {
+  // Devuelve [rootId, ...todos los hijos, nietos, etc.]
   const all = db.allUsers();
   const children = {};
   for (const u of all) {
@@ -41,6 +51,10 @@ function canManage(actingUser, targetUserId) {
   if (actingUser.role === "superadmin") return true;
   return descendantIds(actingUser.id).includes(Number(targetUserId));
 }
+
+// ---------------------------------------------------------------
+// Auth
+// ---------------------------------------------------------------
 
 function authMiddleware(req, res, next) {
   const header = req.headers.authorization || "";
@@ -87,6 +101,10 @@ app.get("/api/me", authMiddleware, (req, res) => {
   const u = req.user;
   res.json({ id: u.id, username: u.username, role: u.role, credits: u.credits, is_infinite: !!u.is_infinite });
 });
+
+// ---------------------------------------------------------------
+// Gestion de usuarios del panel (sellers / resellers)
+// ---------------------------------------------------------------
 
 app.post("/api/panel-users", authMiddleware, (req, res) => {
   const { username, password, role, credits } = req.body || {};
@@ -150,6 +168,10 @@ app.post("/api/credits/transfer", authMiddleware, (req, res) => {
   res.json({ ok: true });
 });
 
+// ---------------------------------------------------------------
+// Configuracion de servidores (Jellyfin/Emby/Plex) - solo Super Admin
+// ---------------------------------------------------------------
+
 app.get("/api/settings/servers", authMiddleware, requireRole("superadmin"), (req, res) => {
   res.json({
     jellyfin: db.getSetting("jellyfin", { baseUrl: "", apiKey: "" }),
@@ -180,6 +202,10 @@ app.post("/api/settings/test/:service", authMiddleware, requireRole("superadmin"
   }
 });
 
+// ---------------------------------------------------------------
+// Cuentas de clientes (media_accounts)
+// ---------------------------------------------------------------
+
 const PLAN_DAYS = { "1m": 30, "2m": 60, "3m": 90, "6m": 180 };
 const DEMO_HOURS = { "1h": 1, "2h": 2, "3h": 3, "12h": 12 };
 
@@ -191,9 +217,11 @@ function addDuration(base, { days, hours }) {
 }
 
 app.post("/api/accounts", authMiddleware, async (req, res) => {
-  const { service, username, password, client_name, plan, is_demo, demo_length } = req.body || {};
+  const { service, username, password, client_name, plan, is_demo, demo_length, max_devices } = req.body || {};
   if (!service || !username || !password) return res.status(400).json({ error: "Faltan datos" });
   if (!["jellyfin", "emby", "plex"].includes(service)) return res.status(400).json({ error: "Servicio invalido" });
+
+  const maxDevices = [1, 2, 3].includes(Number(max_devices)) ? Number(max_devices) : 1;
 
   let expiresAt;
   let cost = 0;
@@ -219,6 +247,7 @@ app.post("/api/accounts", authMiddleware, async (req, res) => {
       }
       const created = await mediaServer.createUser(cfg.baseUrl, cfg.apiKey, username, password);
       serviceUserId = created.id;
+      await mediaServer.setMaxDevices(cfg.baseUrl, cfg.apiKey, serviceUserId, maxDevices);
     } else if (service === "plex") {
       const cfg = db.getSetting("plex", {});
       if (!cfg.token || !cfg.serverId) {
@@ -240,6 +269,7 @@ app.post("/api/accounts", authMiddleware, async (req, res) => {
       is_demo: !!is_demo,
       status: "active",
       expires_at: expiresAt,
+      max_devices: maxDevices,
     });
 
     res.json({ id: acc.id, expires_at: expiresAt });
@@ -275,6 +305,10 @@ app.delete("/api/accounts/:id", authMiddleware, async (req, res) => {
   }
 });
 
+// ---------------------------------------------------------------
+// Suspension automatica por vencimiento (revision cada 5 minutos)
+// ---------------------------------------------------------------
+
 async function checkExpirations() {
   const now = new Date();
   const expired = db.allMediaAccounts().filter(
@@ -298,6 +332,10 @@ async function checkExpirations() {
 }
 setInterval(checkExpirations, 5 * 60 * 1000);
 checkExpirations();
+
+// ---------------------------------------------------------------
+// Dashboard
+// ---------------------------------------------------------------
 
 app.get("/api/dashboard", authMiddleware, (req, res) => {
   const ids = new Set(descendantIds(req.user.id));

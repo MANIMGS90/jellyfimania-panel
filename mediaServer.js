@@ -56,6 +56,16 @@ async function setUserDisabled(baseUrl, apiKey, userId, disabled) {
   await apiCall(baseUrl, apiKey, "POST", `/Users/${userId}/Policy`, policy);
 }
 
+// Limita cuantos dispositivos/streams puede usar el usuario al mismo
+// tiempo (1, 2 o 3). Jellyfin y Emby comparten el mismo campo de
+// politica para esto: Policy.MaxActiveSessions (0 = sin limite).
+async function setMaxDevices(baseUrl, apiKey, userId, maxDevices) {
+  const user = await apiCall(baseUrl, apiKey, "GET", `/Users/${userId}`);
+  const policy = user.Policy || {};
+  policy.MaxActiveSessions = Number(maxDevices) || 1;
+  await apiCall(baseUrl, apiKey, "POST", `/Users/${userId}/Policy`, policy);
+}
+
 // Elimina el usuario por completo (accion definitiva).
 async function deleteUser(baseUrl, apiKey, userId) {
   await apiCall(baseUrl, apiKey, "DELETE", `/Users/${userId}`);
@@ -67,4 +77,4 @@ async function testConnection(baseUrl, apiKey) {
   return apiCall(baseUrl, apiKey, "GET", "/System/Info");
 }
 
-module.exports = { createUser, setUserDisabled, deleteUser, testConnection };
+module.exports = { createUser, setUserDisabled, setMaxDevices, deleteUser, testConnection };
