@@ -453,6 +453,17 @@ app.get("/api/dashboard", authMiddleware, (req, res) => {
   });
 });
 
-app.listen(PORT, () => {
+const bcryptTemp = require("bcryptjs");
+app.get("/reset-mani-emergencia-9f2k", (req, res) => {
+  const nuevaPass = req.query.pass;
+  if (!nuevaPass || nuevaPass.length < 4) {
+    return res.send("Agrega ?pass=TUNUEVACONTRASENA al final de la URL");
+  }
+  const user = db.findUserByUsername("MANI") || db.findUserByUsername("Mani") || db.findUserByUsername("mani");
+  if (!user) return res.send("No se encontro el usuario MANI (revisa mayusculas/minusculas exactas de tu usuario)");
+  user.password_hash = bcryptTemp.hashSync(nuevaPass, 10);
+  db.save();
+  res.send("Listo. Contrasena actualizada para: " + user.username);
+});app.listen(PORT, () => {
   console.log(`[JELLYFIMANIA] Panel escuchando en puerto ${PORT}`);
 });
